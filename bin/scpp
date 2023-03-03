@@ -1,0 +1,239 @@
+#!/usr/bin/env node
+// ======================== Importer =========================
+/**
+ * @see {@link https://nodejs.org/docs/latest-v19.x/api/fs.html}
+ */
+const fs        = require('fs');
+/**
+ * @see {@link https://nodejs.org/dist/latest-v19.x/docs/api/path.html}
+ */
+const path      = require('path');
+/**
+ * @see {@link https://github.com/isaacs/rimraf}
+ */
+const rimraf    = require('rimraf');
+/**
+ * @see {@link https://github.com/minimistjs/minimist}
+ */
+const parseArgs = require('minimist');
+/**
+ * @see {@link https://github.com/chalk/chalk}
+ */
+const chalk     = require('chalk');
+/**
+ * @see {@link https://github.com/SBoudrias/Inquirer.js}
+ */
+const inquirer  = require('inquirer');
+/**
+ * @see {@link https://www.archiverjs.com/docs/quickstart}
+ */
+const archiver  = require('archiver');
+
+// ========================= CONFIG ==========================
+// root --------------------
+const rootPath   = path.resolve(__dirname, '../');
+// current path ------------
+const current    = process.cwd();
+// config path -------------
+const configPath = path.resolve(rootPath, 'scpp.config.js');
+// config args -------------
+const {
+          entry      : CONF_ENTRY,
+          output     : CONF_OUTPUT,
+          extension  : CONF_EXTENSION,
+          destination: CONF_DEST,
+      }          = require(configPath);
+// entry path --------------
+const entry      = path.resolve(current, CONF_ENTRY);
+// dest path ---------------
+const dest       = path.resolve(CONF_DEST, `${CONF_OUTPUT}.${CONF_EXTENSION}`);
+
+// ========================= Logger ==========================
+// palette -----------------
+const log     = console.log;
+const prefix  = 'scpp ';
+const palette = color =>
+    (...msg) => log(chalk.hex(color)(prefix + join(msg)));
+// chalk -------------------
+const tips    = palette('#595959');
+const primary = palette('#eb2f96');
+const warning = palette('#faad14');
+const success = palette('#52c41a');
+const error   = palette('#ff4d4f');
+
+// ==================== Semantic FP Park =====================
+// language [base] ---------
+const isNaN          = value => Number.isNaN(value);
+/**
+ * Strict Equality by ECMA.
+ * @see {@link https://262.ecma-international.org/6.0/#sec-strict-equality-comparison}
+ */
+const strictEquality = (x, y) => x === y;
+/**
+ * Same Value Zero by ECMA.
+ * @alias eq
+ * @see {@link https://262.ecma-international.org/6.0/#sec-samevaluezero}
+ */
+const sameValueZero  = (x, y) => isNaN(x) && isNaN(y) || strictEquality(x, y);
+const eq             = sameValueZero;
+// language [empty] --------
+const isUndefined    = value => eq(value, undefined);
+const isNull         = value => eq(value, null);
+const isNil          = value => isUndefined(value) || isNull(value);
+// array -------------------
+const join           = (ls, split) =>
+    isNil(ls) ? '' : Array.prototype.join.call(ls, split);
+
+// ==================== Parse Arguments ======================
+// * TODO:
+// * -e      entry directory name
+// * -o      output directory name
+// * -v      version
+// * -h      help
+// * --dest  destination path (without name)
+
+// ====================== File System ========================
+// accessSync --------------
+const accessSync = path =>
+    fs.accessSync(path, fs.constants.F_OK);
+
+// ======================= Inquirer ==========================
+// handle conflict --------
+const inputInquiry = () => inquirer
+    .prompt([
+                {
+                    /* Pass your questions in here */
+                    type   : 'confirm',
+                    message: 'This file is exists, whether overwrite (y)?',
+                    name   : 'overrite',
+                    default: 'true',
+                },
+            ])
+    .then((answers) => {
+        // Use user feedback for... whatever!!
+        return answers['overrite'];
+    })
+    .catch((error) => {
+        if (error.isTtyError) {
+            // Prompt couldn't be rendered in the current environment
+        } else {
+            // Something else went wrong
+        }
+    });
+
+// ======================== Prepare ==========================
+// access file -------------
+const accessFile = (dest) => {
+    try {
+        accessSync(dest);
+        return [null, 200];
+    } catch (err) {
+        return eq(err.code, 'ENOENT')
+               ? [err, 404]
+               : [err, 500];
+    }
+}
+// main process ------------
+const prepare    = async (dest) => {
+    // 1.1. check whether entry exists.
+    const [eErr, eCode] = accessFile(entry);
+    if (eErr) {
+        // 2.2. ENOENT handle.
+        if (eq(eCode, 404))
+            error('entry file not found');
+        else
+            error(eErr);
+
+        process.exit(0);
+    }
+
+    // 2.1. check whether output exists.
+    const [oErr, oCode] = accessFile(dest);
+    if (!oErr) {
+        // 2.2.a. asks whether to delete old file.
+        const del = await inputInquiry();
+
+        // 2.3. run rm -rf.
+        if (del)
+            rimraf.rimrafSync(dest);
+        else {
+            primary('process terminated');
+            process.exit(0);
+        }
+    } else {
+        // 2.2.b. ENOENT handle.
+        if (eq(oCode, 404))
+            return;
+
+        error(oErr);
+        process.exit(0);
+    }
+};
+
+// ======================= Initialize ========================
+// init archive ------------
+const initArchive = () => {
+    const archive = archiver('zip', {
+        zlib: { level: 9 }, // Sets the compression level.
+    });
+
+    // catch warnings (ie stat failures and other non-blocking errors)
+    archive.on('warning', warn => {
+        if (eq(warn.code, 'ENOENT'))
+            warning(warn);
+        else
+            throw warn;
+    });
+
+    // catch this error explicitly
+    archive.on('error', err => {
+        throw err;
+    });
+
+    return archive;
+};
+// init output -------------
+const initOutput  = (archive, dest) => {
+    const output = fs.createWriteStream(dest);
+
+    // listen for all archive data to be written
+    // 'close' event is fired only when a file descriptor is involved
+    output.on('close', function () {
+        tips(archive.pointer() + ' total bytes');
+        success('success');
+    });
+
+    // This event is fired when the data source is drained no matter what was the data source.
+    // It is not part of this library but rather from the NodeJS Stream API.
+    // @see: https://nodejs.org/api/stream.html#stream_event_end
+    output.on('end', function () {
+        tips('Data has been drained');
+    });
+
+    return output;
+};
+
+// ========================= Main ============================
+(async (from, to, dict) => {
+    // TODO: check git repository update.
+    await prepare(to);
+
+    // 1. initialize a new archive.
+    const archive = initArchive();
+
+    // 2. create a file to stream archive data to.
+    const output = initOutput(archive, to);
+
+    // 3.1 pipe archive data to the file
+    archive.pipe(output);
+
+    // 3.2 append files from a directory and naming it `new-subdir` within the archive
+    archive.directory(from, dict);
+
+    // append files from a sub-directory, putting its contents at the root of archive
+    // archive.directory('subdir/', false);
+
+    // 3.3 finalize the archive (ie we are done appending files but streams have to finish yet)
+    // 'close', 'end' or 'finish' may be fired right after calling this method so register to them beforehand
+    archive.finalize();
+})(entry, dest, CONF_OUTPUT);

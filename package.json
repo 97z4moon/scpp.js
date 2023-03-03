@@ -1,0 +1,30 @@
+{
+  "name": "scpp",
+  "version": "1.0.0-beta",
+  "private": true,
+  "author": "Zhang Zixin <zzx2067@outlook.com>",
+  "description": "Shortcut for pre-production",
+  "license": "MIT",
+  "engines": {
+    "node": ">=14.17.5"
+  },
+  "keywords": [
+    "shortcut",
+    "pre-production",
+    "cli",
+    "command",
+    "command-line",
+    "nodejs"
+  ],
+  "bin": "bin/scpp",
+  "devDependencies": {
+    "archiver": "^5.3.1",
+    "chalk": "^4.1.0",
+    "inquirer": "^8.0.0",
+    "minimist": "^1.2.8",
+    "rimraf": "^4.1.2"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  }
+}
