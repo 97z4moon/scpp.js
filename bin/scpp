@@ -91,6 +91,7 @@ const join           = (ls, split) =>
 // * -v      version
 // * -h      help
 // * --dest  destination path (without name)
+const cmdArgs = parseArgs(process.argv.slice(2)) || {};
 
 // ====================== File System ========================
 // accessSync --------------
@@ -134,7 +135,9 @@ const accessFile = (dest) => {
     }
 }
 // main process ------------
-const prepare    = async (dest) => {
+const prepare    = async (dest, args = {}) => {
+    const { f: isForceToOverwrite } = args;
+
     // 1.1. check whether entry exists.
     const [eErr, eCode] = accessFile(entry);
     if (eErr) {
@@ -151,7 +154,7 @@ const prepare    = async (dest) => {
     const [oErr, oCode] = accessFile(dest);
     if (!oErr) {
         // 2.2.a. asks whether to delete old file.
-        const del = await inputInquiry();
+        const del = isForceToOverwrite || await inputInquiry();
 
         // 2.3. run rm -rf.
         if (del)
@@ -214,9 +217,9 @@ const initOutput  = (archive, dest) => {
 };
 
 // ========================= Main ============================
-(async (from, to, dict) => {
+(async (from, to, dict, args) => {
     // TODO: check git repository update.
-    await prepare(to);
+    await prepare(to, args);
 
     // 1. initialize a new archive.
     const archive = initArchive();
@@ -236,4 +239,4 @@ const initOutput  = (archive, dest) => {
     // 3.3 finalize the archive (ie we are done appending files but streams have to finish yet)
     // 'close', 'end' or 'finish' may be fired right after calling this method so register to them beforehand
     archive.finalize();
-})(entry, dest, CONF_OUTPUT);
+})(entry, dest, CONF_OUTPUT, cmdArgs);
