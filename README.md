@@ -5,7 +5,7 @@
 
 ## Introduction
 
-A Pre-production Shortcut (BI group for Modo).
+For learning Node.js in CLI and an archiving utility.
 
 ## Usage
 
@@ -13,7 +13,7 @@ A Pre-production Shortcut (BI group for Modo).
 scpp [options] <file ...>
 ```
 
-Currently, only [configured](./scpp.config.js) is supported.
+Currently, only [configured](./scpp.config.js) is supported. CLI arguments is coming soon.
 
 ## Roadmap
 
