@@ -31,4 +31,4 @@ Currently, only [configured](./scpp.config.js) is supported. CLI arguments is co
 
 ## License
 
-[MIT](./LICENSE) © [97z4moon](https://github.com/97z4moon) && Modo BI group
+[MIT](./LICENSE) © [97z4moon](https://github.com/97z4moon)
